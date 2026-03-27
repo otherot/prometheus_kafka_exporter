@@ -4,6 +4,8 @@
 
 Асинхронный экспортёр метрик Prometheus в Kafka с поддержкой highload (10k+ RPS).
 
+**Версия:** 0.1.0 (в разработке)
+
 **Архитектура:**
 - **aiohttp** — асинхронный HTTP-клиент для сбора метрик с Prometheus
 - **aiokafka** — асинхронный Kafka-продюсер для отправки метрик
@@ -55,9 +57,9 @@ python -m exporter.main config/config.example.yaml
 
 **Docker Compose (тесты):**
 ```bash
-docker-compose up -d
-docker-compose logs -f exporter
-docker-compose down
+docker compose up -d
+docker compose logs -f exporter
+docker compose down
 ```
 
 **Kubernetes:**
@@ -97,8 +99,52 @@ docker build -t prometheus-kafka-exporter:0.1.0 .
 **Тестирование:**
 - Интеграционные тесты с Docker (Kafka + Zookeeper + Prometheus)
 - pytest + pytest-asyncio
+- **Требуется Docker для запуска тестов**
 
 **Ресурсы для highload:**
 - Requests: 500m CPU / 1Gi memory
 - Limits: 2 CPU / 4Gi memory
 - HPA: 2-10 реплик
+
+## Current Status (v0.1.0)
+
+**Выполнено:**
+- ✅ Базовая структура проекта
+- ✅ Конфигурация через YAML (все настройки)
+- ✅ Асинхронный сбор метрик (aiohttp + SSL)
+- ✅ Асинхронная отправка в Kafka (aiokafka + SASL/SSL)
+- ✅ Настраиваемый JSON-формат
+- ✅ Логирование в stdout и Kafka
+- ✅ Dockerfile (multi-stage)
+- ✅ docker-compose.yml для тестов
+- ✅ Kubernetes манифесты (Deployment, ConfigMap, Service, HPA, PDB)
+- ✅ Интеграционные тесты (pytest)
+- ✅ Документация (README.md)
+
+**Следующие шаги:**
+- [ ] Запустить интеграционные тесты (требуется Docker)
+- [ ] Исправить ошибки если есть
+- [ ] Создать PR и замержить в main
+- [ ] Создать тег v0.1.0
+- [ ] Опубликовать Docker образ
+
+## Git
+
+**Ветка:** 0.1.0 (запушена в origin)
+
+**Коммиты:**
+```
+ed4f201 chore: добавить __init__.py для tests и .qwen/ конфигурацию
+efb459e docs: добавить документацию
+293fb8c feat: добавить Kubernetes манифесты (часть 2)
+79951af feat: добавить Kubernetes манифесты (часть 1)
+93daff8 test: добавить интеграционные тесты
+e0af643 feat: добавить Docker и тестовое окружение
+69597a5 feat: реализовать точку входа и основной цикл
+1d0d2f2 feat: реализовать отправку в Kafka и логирование
+3ea544c feat: реализовать сбор и форматирование метрик
+46772bc feat: реализовать систему конфигурации
+f0a3f90 feat: добавить базовую структуру проекта и зависимости
+```
+
+**PR:** https://github.com/otherot/prometheus_kafka_exporter/pull/new/0.1.0
