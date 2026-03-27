@@ -1,0 +1,101 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-kafka-exporter-config
+  namespace: prometheus-kafka-exporter
+  labels:
+    app: prometheus-kafka-exporter
+data:
+  config.yaml: |
+    # Конфигурация Prometheus Kafka Exporter
+    # Все настройки загружаются из этого ConfigMap
+
+    # Интервал сбора метрик (секунды)
+    scrape_interval: 30
+
+    # Настройки подключения к Prometheus
+    prometheus:
+      url: "http://prometheus-server.prometheus.svc.cluster.local:80"
+      # Метрики для сбора (список имен или regex)
+      metrics:
+        - "up"
+        - "kafka_.*"
+        - "prometheus_.*"
+      # SSL настройки для подключения к Prometheus
+      ssl:
+        enabled: false
+        ca_file: "/etc/ssl/certs/ca-certificates.crt"
+        cert_file: ""
+        key_file: ""
+        verify: true
+      # Basic auth / Token
+      auth:
+        enabled: false
+        username: ""
+        password: ""
+        token: ""
+
+    # Настройки Kafka
+    kafka:
+      brokers:
+        - "kafka-bootstrap.kafka.svc.cluster.local:9092"
+      topic: "prometheus-metrics"
+      # SASL/SSL настройки для Kafka
+      security:
+        protocol: "PLAINTEXT"  # PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL
+        ssl:
+          ca_file: "/etc/ssl/certs/ca-certificates.crt"
+          cert_file: ""
+          key_file: ""
+          password: ""
+        sasl:
+          mechanism: "PLAIN"  # PLAIN, SCRAM-SHA-256, SCRAM-SHA-512
+          username: ""
+          password: ""
+      # Настройки продюсера
+      producer:
+        batch_size: 16384
+        linger_ms: 10
+        compression_type: "snappy"  # none, gzip, snappy, lz4, zstd
+        acks: "all"  # 0, 1, all
+        retries: 3
+        retry_backoff_ms: 100
+
+    # Формат JSON для отправки метрик
+    # Доступные переменные: {name}, {value}, {timestamp}, {labels}, {help}, {type}
+    format:
+      json_template: |
+        {
+          "name": "{name}",
+          "value": {value},
+          "timestamp": {timestamp},
+          "labels": {labels},
+          "type": "{type}"
+        }
+      timestamp_format: "unix_ms"  # unix_ms, unix_s, iso
+
+    # Логирование
+    logging:
+      level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+      # Вывод в stdout
+      stdout:
+        enabled: true
+        format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+      # Вывод в Kafka
+      kafka:
+        enabled: false
+        topic: "prometheus-exporter-logs"
+        format: "{\"level\":\"%(levelname)s\",\"logger\":\"%(name)s\",\"message\":\"%(message)s\",\"timestamp\":%(asctime)s}"
+
+    # Метрики самого экспортера (для Prometheus)
+    exporter_metrics:
+      enabled: true
+      port: 8080
+      path: "/metrics"
+
+    # Ресурсы и производительность
+    performance:
+      scrape_workers: 4
+      send_buffer_size: 1000
+      scrape_timeout: 10
+      send_timeout: 5
