@@ -12,3 +12,7 @@ build/
 .pytest_cache/
 .coverage
 *.log
+
+# Qwen context
+.qwen/
+QWEN.md
