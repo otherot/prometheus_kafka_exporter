@@ -36,13 +36,6 @@ class PrometheusCollector:
 
     async def start(self) -> None:
         """Инициализировать HTTP сессию."""
-        connector = TCPConnector(
-            limit=100,
-            limit_per_host=50,
-            ttl_dns_cache=300,
-            use_dns_cache=True,
-        )
-
         # SSL настройки
         ssl_context = None
         if self.config.ssl.enabled:
@@ -57,6 +50,14 @@ class PrometheusCollector:
                 )
             ssl_context.check_hostname = self.config.ssl.verify
             ssl_context.verify_mode = ssl.CERT_REQUIRED if self.config.ssl.verify else ssl.CERT_NONE
+
+        connector = TCPConnector(
+            limit=100,
+            limit_per_host=50,
+            ttl_dns_cache=300,
+            use_dns_cache=True,
+            ssl=ssl_context if self.config.ssl.enabled else None,
+        )
 
         # Заголовки
         headers = {}
@@ -73,7 +74,6 @@ class PrometheusCollector:
         self._session = ClientSession(
             timeout=self.timeout,
             connector=connector,
-            ssl=ssl_context if self.config.ssl.enabled else None,
             headers=headers,
         )
 

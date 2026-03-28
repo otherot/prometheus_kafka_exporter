@@ -19,7 +19,9 @@ class MetricFormatter:
     def format(self, metric: Metric) -> str:
         """Форматировать метрику в JSON строку."""
         data = self._build_data(metric)
-        return self._template.format(**data)
+        # Парсим labels обратно в dict для JSON сериализации
+        data["labels"] = json.loads(data["labels"])
+        return json.dumps(data, ensure_ascii=False)
 
     def format_batch(self, metrics: list[Metric]) -> list[str]:
         """Форматировать пакет метрик."""

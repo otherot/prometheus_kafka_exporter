@@ -18,6 +18,11 @@ class KafkaIntegrationTest:
     EXPORTER_METRICS = "http://localhost:8080"
 
     @pytest.fixture
+    def topic(self) -> str:
+        """Топик по умолчанию для тестов."""
+        return "test-topic"
+
+    @pytest.fixture
     async def kafka_producer(self):
         """Создать Kafka продюсер для тестов."""
         producer = AIOKafkaProducer(bootstrap_servers=self.KAFKA_BOOTSTRAP)
@@ -115,42 +120,64 @@ class TestKafkaIntegration(KafkaIntegrationTest):
         assert msg.value == message
 
     @pytest.mark.asyncio
-    async def test_kafka_json_message(self, kafka_producer, kafka_consumer):
+    async def test_kafka_json_message(self, kafka_producer):
         """Проверка отправки JSON сообщений."""
         topic = "test-json-topic"
         data = {"name": "test_metric", "value": 123.45, "timestamp": int(time.time() * 1000)}
 
-        # Отправить JSON
-        await kafka_producer.send_and_wait(topic, value=json.dumps(data).encode())
+        # Создать консьюмер для этого топика
+        consumer = AIOKafkaConsumer(
+            topic,
+            bootstrap_servers=self.KAFKA_BOOTSTRAP,
+            auto_offset_reset="earliest",
+            consumer_timeout_ms=5000,
+        )
+        await consumer.start()
+        try:
+            # Отправить JSON
+            await kafka_producer.send_and_wait(topic, value=json.dumps(data).encode())
 
-        # Получить и распарсить
-        msg = await kafka_consumer.getone()
-        received = json.loads(msg.value.decode())
-        assert received["name"] == data["name"]
-        assert received["value"] == data["value"]
+            # Получить и распарсить
+            msg = await consumer.getone()
+            received = json.loads(msg.value.decode())
+            assert received["name"] == data["name"]
+            assert received["value"] == data["value"]
+        finally:
+            await consumer.stop()
 
 
 class TestExporterEndToEnd(KafkaIntegrationTest):
     """Сквозные тесты экспортера."""
 
     @pytest.mark.asyncio
-    async def test_metrics_in_kafka(self, kafka_consumer):
+    async def test_metrics_in_kafka(self):
         """Проверка наличия метрик в Kafka после работы экспортера."""
         topic = "prometheus-metrics"
 
-        # Ждем сообщения с таймаутом
-        messages = []
-        async for msg in kafka_consumer:
-            messages.append(msg)
-            if len(messages) >= 5:
-                break
+        # Создать консьюмер для этого топика
+        consumer = AIOKafkaConsumer(
+            topic,
+            bootstrap_servers=self.KAFKA_BOOTSTRAP,
+            auto_offset_reset="earliest",
+            consumer_timeout_ms=10000,
+        )
+        await consumer.start()
+        try:
+            # Ждем сообщения с таймаутом
+            messages = []
+            async for msg in consumer:
+                messages.append(msg)
+                if len(messages) >= 5:
+                    break
 
-        # Проверяем формат сообщений
-        for msg in messages:
-            data = json.loads(msg.value.decode())
-            assert "name" in data
-            assert "value" in data
-            assert "timestamp" in data
+            # Проверяем формат сообщений
+            for msg in messages:
+                data = json.loads(msg.value.decode())
+                assert "name" in data
+                assert "value" in data
+                assert "timestamp" in data
+        finally:
+            await consumer.stop()
 
 
 if __name__ == "__main__":

@@ -20,14 +20,13 @@ kafka:
   producer:
     batch_size: 16384
     linger_ms: 10
-    compression_type: "snappy"
+    compression_type: "gzip"
     acks: "all"
     retries: 3
     retry_backoff_ms: 100
 
 format:
-  json_template: |
-    {"name":"{name}","value":{value},"timestamp":{timestamp},"labels":{labels},"type":"{type}"}
+  json_template: '{"name":"{name}","value":{value},"timestamp":{timestamp},"labels":{labels},"type":"{type}"}'
   timestamp_format: "unix_ms"
 
 logging:

@@ -62,11 +62,10 @@ class KafkaSender:
             sasl_mechanism=sasl_mechanism,
             sasl_plain_username=sasl_plain_username,
             sasl_plain_password=sasl_plain_password,
-            batch_size=self.config.producer.batch_size,
+            max_batch_size=self.config.producer.batch_size,
             linger_ms=self.config.producer.linger_ms,
             compression_type=self.config.producer.compression_type,
             acks=self.config.producer.acks,
-            retries=self.config.producer.retries,
             retry_backoff_ms=self.config.producer.retry_backoff_ms,
         )
 
