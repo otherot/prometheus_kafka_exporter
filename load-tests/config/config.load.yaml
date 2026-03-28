@@ -27,7 +27,7 @@ kafka:
     batch_size: 32768
     linger_ms: 20
     compression_type: "gzip"
-    acks: "1"
+    acks: 1
     retries: 3
     retry_backoff_ms: 50
 

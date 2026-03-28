@@ -128,14 +128,6 @@ services:
     environment:
       - EXPORTER_URL=http://exporter:8080
       - K6_OUT=json=/results/k6_results.json
-    command: ["run", "--verbose", "/scripts/http_load_test.js"]
-    profiles:
-      default:
-        command: ["run", "/scripts/http_load_test.js"]
-      highload:
-        command: ["run", "--env", "TEST_TYPE=highload", "/scripts/http_load_test.js"]
-      stress:
-        command: ["run", "--env", "TEST_TYPE=stress", "/scripts/http_load_test.js"]
 
   # Grafana для визуализации (опционально)
   grafana:

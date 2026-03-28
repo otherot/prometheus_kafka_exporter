@@ -16,3 +16,6 @@ build/
 # Qwen context
 .qwen/
 QWEN.md
+
+# Load test results
+load-tests/results/
