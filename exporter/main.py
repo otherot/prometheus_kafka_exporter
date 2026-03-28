@@ -4,7 +4,9 @@ import asyncio
 import logging
 import signal
 import sys
+import time
 from pathlib import Path
+from typing import Optional
 
 from prometheus_client import start_http_server
 
@@ -13,6 +15,7 @@ from .collector import PrometheusCollector
 from .formatter import MetricFormatter
 from .sender import KafkaSender
 from .logger import setup_logging
+from . import metrics as exporter_metrics
 
 
 logger = logging.getLogger(__name__)
@@ -62,6 +65,9 @@ class PrometheusKafkaExporter:
                 f"Exporter metrics available at :{self.config.exporter_metrics.port}"
                 f"{self.config.exporter_metrics.path}"
             )
+            # Инициализировать метрики состояния
+            exporter_metrics.up.set(1)
+            exporter_metrics.scrape_interval.set(self.config.scrape_interval)
 
         # Инициализировать компоненты
         self._formatter = MetricFormatter(self.config.format)
@@ -93,6 +99,9 @@ class PrometheusKafkaExporter:
         """Остановить экспортер."""
         logger.info("Stopping Prometheus Kafka Exporter...")
         self._running = False
+        
+        # Установить статус down
+        exporter_metrics.up.set(0)
 
         if self._collector:
             await self._collector.stop()

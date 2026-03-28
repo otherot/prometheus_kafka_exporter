@@ -11,6 +11,7 @@ import aiohttp
 from aiohttp import ClientSession, ClientTimeout, TCPConnector
 
 from .config import Config, PrometheusConfig
+from . import metrics as exporter_metrics
 
 
 @dataclass
@@ -92,21 +93,35 @@ class PrometheusCollector:
         if not self._session:
             raise RuntimeError("Collector not started. Call start() first.")
 
+        start_time = time.time()
         url = urljoin(self.config.url, "/api/v1/query?query={query}")
         metrics = []
 
-        # Собираем метрики конкурентно
-        tasks = []
-        for pattern in self.config.metrics:
-            tasks.append(self._collect_by_pattern(pattern, url))
+        try:
+            # Собираем метрики конкурентно
+            tasks = []
+            for pattern in self.config.metrics:
+                tasks.append(self._collect_by_pattern(pattern, url))
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        for result in results:
-            if isinstance(result, list):
-                metrics.extend(result)
-            elif isinstance(result, Exception):
-                # Логируем ошибку, но продолжаем
-                pass
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, list):
+                    metrics.extend(result)
+                elif isinstance(result, Exception):
+                    # Логируем ошибку, но продолжаем
+                    exporter_metrics.errors_total.labels(type="scrape").inc()
+
+            # Обновляем метрики
+            duration = time.time() - start_time
+            exporter_metrics.scrape_duration.observe(duration)
+            exporter_metrics.scrape_count.labels(status="success").inc()
+            exporter_metrics.scrape_metrics_count.set(len(metrics))
+            exporter_metrics.last_scrape_timestamp.set(time.time())
+
+        except Exception as e:
+            exporter_metrics.scrape_count.labels(status="error").inc()
+            exporter_metrics.errors_total.labels(type="scrape").inc()
+            raise
 
         return metrics
 

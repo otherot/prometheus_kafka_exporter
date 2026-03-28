@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import time
 from typing import Any, Optional
 
 from aiokafka import AIOKafkaProducer
@@ -10,6 +11,7 @@ from aiokafka.errors import KafkaError
 
 from .config import KafkaConfig, KafkaSecurityConfig
 from .collector import Metric
+from . import metrics as exporter_metrics
 
 
 logger = logging.getLogger(__name__)
@@ -118,6 +120,7 @@ class KafkaSender:
         if not self._producer:
             raise RuntimeError("Sender not started. Call start() first.")
 
+        start_time = time.time()
         sent_count = 0
         tasks = []
 
@@ -128,6 +131,18 @@ class KafkaSender:
         for result in results:
             if result is True:
                 sent_count += 1
+
+        # Обновляем метрики
+        duration = time.time() - start_time
+        exporter_metrics.kafka_send_duration.observe(duration)
+        exporter_metrics.kafka_send_count.labels(status="success" if sent_count > 0 else "error").inc()
+        exporter_metrics.kafka_messages_count.inc(sent_count)
+        exporter_metrics.kafka_batch_size.observe(len(metrics))
+        exporter_metrics.last_send_timestamp.set(time.time())
+
+        if sent_count < len(metrics):
+            exporter_metrics.kafka_send_count.labels(status="error").inc()
+            exporter_metrics.errors_total.labels(type="send").inc()
 
         return sent_count
 
