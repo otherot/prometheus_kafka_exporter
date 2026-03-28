@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
-Асинхронный экспортёр метрик Prometheus в Kafka с поддержкой highload (10k+ RPS).
+Асинхронный экспортёр метрик Prometheus в Kafka с разработанный с прицелом на highload.
 
 **🇬🇧 English version:** [README.md](README.md)
 
