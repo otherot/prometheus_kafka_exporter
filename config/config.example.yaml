@@ -1,0 +1,96 @@
+# Конфигурация Prometheus Kafka Exporter
+# Все настройки загружаются из ConfigMap в Kubernetes
+
+# Интервал сбора метрик (секунды)
+scrape_interval: 30
+
+# Настройки подключения к Prometheus
+prometheus:
+  url: "http://prometheus:9090"
+  # Метрики для сбора (список имен или regex)
+  metrics:
+    - "up"
+    - "kafka_.*"
+  # SSL настройки
+  ssl:
+    enabled: false
+    ca_file: "/etc/ssl/certs/ca-certificates.crt"
+    cert_file: ""
+    key_file: ""
+    verify: true
+  # Basic auth
+  auth:
+    enabled: false
+    username: ""
+    password: ""
+    token: ""
+
+# Настройки Kafka
+kafka:
+  brokers:
+    - "kafka:9092"
+  topic: "prometheus-metrics"
+  # SASL/SSL настройки
+  security:
+    protocol: "PLAINTEXT"  # PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL
+    ssl:
+      ca_file: ""
+      cert_file: ""
+      key_file: ""
+      password: ""
+    sasl:
+      mechanism: "PLAIN"  # PLAIN, SCRAM-SHA-256, SCRAM-SHA-512
+      username: ""
+      password: ""
+  # Настройки продюсера
+  producer:
+    batch_size: 16384
+    linger_ms: 10
+    compression_type: "snappy"  # none, gzip, snappy, lz4, zstd
+    acks: "all"  # 0, 1, all
+    retries: 3
+    retry_backoff_ms: 100
+
+# Формат JSON для отправки метрик
+# Доступные переменные: {name}, {value}, {timestamp}, {labels}, {help}, {type}
+format:
+  json_template: |
+    {
+      "name": "{name}",
+      "value": {value},
+      "timestamp": {timestamp},
+      "labels": {labels},
+      "type": "{type}"
+    }
+  # Или простой формат:
+  # json_template: '{"metric":"{name}","value":{value},"ts":{timestamp},"labels":{labels}}'
+  timestamp_format: "unix_ms"  # unix_ms, unix_s, iso
+
+# Логирование
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  # Вывод в stdout
+  stdout:
+    enabled: true
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  # Вывод в Kafka
+  kafka:
+    enabled: false
+    topic: "prometheus-exporter-logs"
+    format: "{\"level\":\"%(levelname)s\",\"logger\":\"%(name)s\",\"message\":\"%(message)s\",\"timestamp\":%(asctime)s}"
+
+# Метрики самого экспортера (для Prometheus)
+exporter_metrics:
+  enabled: true
+  port: 8080
+  path: "/metrics"
+
+# Ресурсы и производительность
+performance:
+  # Количество воркеров для сбора метрик
+  scrape_workers: 4
+  # Размер буфера для отправки в Kafka
+  send_buffer_size: 1000
+  # Таймауты
+  scrape_timeout: 10
+  send_timeout: 5

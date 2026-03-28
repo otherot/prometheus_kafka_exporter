@@ -1,0 +1,155 @@
+version: "3.8"
+
+# Docker Compose для нагрузочного тестирования Prometheus Kafka Exporter
+# Запуск: docker compose -f docker-compose.load.yaml up -d
+# Остановка: docker compose -f docker-compose.load.yaml down
+
+services:
+  # Zookeeper
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: load-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - load-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kafka с увеличенными лимитами для нагрузочного тестирования
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: load-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 6
+      KAFKA_LOG_RETENTION_MS: 3600000
+      KAFKA_SEGMENT_MS: 3600000
+      KAFKA_SOCKET_SEND_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_RECEIVE_BUFFER_BYTES: 102400
+      KAFKA_NUM_NETWORK_THREADS: 8
+      KAFKA_NUM_IO_THREADS: 16
+    networks:
+      - load-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # Prometheus с конфигурацией для генерации большого количества метрик
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: load-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./load-tests/config/prometheus-load.yaml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=1h"
+      - "--web.enable-lifecycle"
+      - "--web.enable-admin-api"
+    networks:
+      - load-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Node Exporter для генерации дополнительных метрик
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: load-node-exporter
+    networks:
+      - load-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9100/metrics"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Экспортер для тестирования
+  exporter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: load-exporter
+    depends_on:
+      kafka:
+        condition: service_healthy
+      prometheus:
+        condition: service_healthy
+    volumes:
+      - ./load-tests/config/config.load.yaml:/etc/config/config.yaml:ro
+    networks:
+      - load-network
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # k6 для HTTP нагрузочного тестирования
+  k6:
+    image: grafana/k6:latest
+    container_name: load-k6
+    depends_on:
+      - exporter
+    volumes:
+      - ./load-tests/k6:/scripts
+      - ./load-tests/results:/results
+    networks:
+      - load-network
+    environment:
+      - EXPORTER_URL=http://exporter:8080
+      - K6_OUT=json=/results/k6_results.json
+
+  # Grafana для визуализации (опционально)
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: load-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    volumes:
+      - grafana-storage:/var/lib/grafana
+    networks:
+      - load-network
+    depends_on:
+      - prometheus
+
+networks:
+  load-network:
+    driver: bridge
+
+volumes:
+  grafana-storage:

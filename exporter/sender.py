@@ -1,0 +1,172 @@
+"""Asynchronous sending of metrics to Kafka."""
+
+import asyncio
+import json
+import logging
+import time
+from typing import Any, Optional
+
+from aiokafka import AIOKafkaProducer
+from aiokafka.errors import KafkaError
+
+from .config import KafkaConfig, KafkaSecurityConfig
+from .collector import Metric
+from . import metrics as exporter_metrics
+
+
+logger = logging.getLogger(__name__)
+
+
+class KafkaSender:
+    """Asynchronous sender of metrics to Kafka."""
+
+    def __init__(
+        self,
+        config: KafkaConfig,
+        performance_config: dict[str, Any],
+    ):
+        self.config = config
+        self.performance_config = performance_config
+        self._producer: Optional[AIOKafkaProducer] = None
+        self._retry_count = config.producer.retries
+        self._retry_backoff = config.producer.retry_backoff_ms / 1000  # ms -> s
+
+    async def start(self) -> None:
+        """Initialize Kafka producer."""
+        # SSL configuration
+        ssl_context = None
+        security = self.config.security
+        if security.protocol in ("SSL", "SASL_SSL"):
+            import ssl
+
+            ssl_context = ssl.create_default_context(cafile=security.ssl.ca_file)
+            if security.ssl.cert_file and security.ssl.key_file:
+                ssl_context.load_cert_chain(
+                    certfile=security.ssl.cert_file,
+                    keyfile=security.ssl.key_file,
+                    password=security.ssl.password or None,
+                )
+
+        # SASL configuration
+        sasl_mechanism = None
+        sasl_plain_username = None
+        sasl_plain_password = None
+
+        if security.protocol in ("SASL_PLAINTEXT", "SASL_SSL"):
+            sasl_mechanism = security.sasl.mechanism
+            sasl_plain_username = security.sasl.username
+            sasl_plain_password = security.sasl.password
+
+        self._producer = AIOKafkaProducer(
+            bootstrap_servers=",".join(self.config.brokers),
+            security_protocol=security.protocol,
+            ssl_context=ssl_context,
+            sasl_mechanism=sasl_mechanism,
+            sasl_plain_username=sasl_plain_username,
+            sasl_plain_password=sasl_plain_password,
+            max_batch_size=self.config.producer.batch_size,
+            linger_ms=self.config.producer.linger_ms,
+            compression_type=self.config.producer.compression_type,
+            acks=self.config.producer.acks,
+            retry_backoff_ms=self.config.producer.retry_backoff_ms,
+        )
+
+        await self._producer.start()
+
+    async def stop(self) -> None:
+        """Close Kafka producer."""
+        if self._producer:
+            await self._producer.stop()
+            self._producer = None
+
+    async def send(self, metric: Metric, formatted: str) -> bool:
+        """Send a metric to Kafka with retry."""
+        if not self._producer:
+            raise RuntimeError("Sender not started. Call start() first.")
+
+        for attempt in range(self._retry_count + 1):
+            try:
+                await asyncio.wait_for(
+                    self._producer.send_and_wait(
+                        self.config.topic,
+                        value=formatted.encode("utf-8"),
+                        key=metric.name.encode("utf-8"),
+                    ),
+                    timeout=self.performance_config.get("send_timeout", 5),
+                )
+                logger.debug(f"Sent metric {metric.name} to {self.config.topic}")
+                return True
+
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout sending metric {metric.name}, attempt {attempt + 1}")
+                if attempt < self._retry_count:
+                    await asyncio.sleep(self._retry_backoff * (attempt + 1))
+
+            except KafkaError as e:
+                logger.warning(f"Kafka error sending metric {metric.name}: {e}, attempt {attempt + 1}")
+                if attempt < self._retry_count:
+                    await asyncio.sleep(self._retry_backoff * (attempt + 1))
+                else:
+                    logger.error(f"Failed to send metric {metric.name} after {self._retry_count + 1} attempts")
+
+            except Exception as e:
+                logger.error(f"Unexpected error sending metric {metric.name}: {e}")
+                return False
+
+        return False
+
+    async def send_batch(self, metrics: list[tuple[Metric, str]]) -> int:
+        """Send a batch of metrics. Returns the number of successfully sent messages."""
+        if not self._producer:
+            raise RuntimeError("Sender not started. Call start() first.")
+
+        start_time = time.time()
+        sent_count = 0
+        tasks = []
+
+        for metric, formatted in metrics:
+            tasks.append(self._send_with_retry(metric, formatted))
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for result in results:
+            if result is True:
+                sent_count += 1
+
+        # Update metrics
+        duration = time.time() - start_time
+        exporter_metrics.kafka_send_duration.observe(duration)
+        exporter_metrics.kafka_send_count.labels(status="success" if sent_count > 0 else "error").inc()
+        exporter_metrics.kafka_messages_count.inc(sent_count)
+        exporter_metrics.kafka_batch_size.observe(len(metrics))
+        exporter_metrics.last_send_timestamp.set(time.time())
+
+        if sent_count < len(metrics):
+            exporter_metrics.kafka_send_count.labels(status="error").inc()
+            exporter_metrics.errors_total.labels(type="send").inc()
+
+        return sent_count
+
+    async def _send_with_retry(self, metric: Metric, formatted: str) -> bool:
+        """Send with retry logic."""
+        for attempt in range(self._retry_count + 1):
+            try:
+                await asyncio.wait_for(
+                    self._producer.send_and_wait(
+                        self.config.topic,
+                        value=formatted.encode("utf-8"),
+                        key=metric.name.encode("utf-8"),
+                    ),
+                    timeout=self.performance_config.get("send_timeout", 5),
+                )
+                return True
+
+            except (asyncio.TimeoutError, KafkaError) as e:
+                logger.debug(f"Retry {attempt + 1}/{self._retry_count} for {metric.name}: {e}")
+                if attempt < self._retry_count:
+                    await asyncio.sleep(self._retry_backoff * (attempt + 1))
+
+            except Exception as e:
+                logger.error(f"Unexpected error sending metric {metric.name}: {e}")
+                return False
+
+        return False

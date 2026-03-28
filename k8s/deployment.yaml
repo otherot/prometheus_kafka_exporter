@@ -1,0 +1,131 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus-kafka-exporter
+  namespace: prometheus-kafka-exporter
+  labels:
+    app: prometheus-kafka-exporter
+    version: "0.1.0"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: prometheus-kafka-exporter
+  template:
+    metadata:
+      labels:
+        app: prometheus-kafka-exporter
+        version: "0.1.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      # Service account для доступа к Kubernetes API (если нужно)
+      serviceAccountName: prometheus-kafka-exporter
+      
+      # Приоритет для планирования
+      priorityClassName: system-cluster-critical
+      
+      # Настройки безопасности pod
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      
+      containers:
+        - name: exporter
+          image: prometheus-kafka-exporter:0.1.0
+          imagePullPolicy: IfNotPresent
+          
+          args:
+            - "/etc/config/config.yaml"
+          
+          ports:
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
+          
+          # Монтирование конфигурации
+          volumeMounts:
+            - name: config
+              mountPath: /etc/config
+              readOnly: true
+            - name: ssl-certs
+              mountPath: /etc/ssl/certs
+              readOnly: true
+          
+          # Ресурсы с учетом istio и vault
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+          
+          # Проверки здоровья
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          
+          # Контекст безопасности
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      
+      # Том для конфигурации
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-kafka-exporter-config
+            items:
+              - key: config.yaml
+                path: config.yaml
+        - name: ssl-certs
+          configMap:
+            name: ca-certificates
+            optional: true
+      
+      # Планирование
+      affinity:
+        # Anti-affinity для распределения по нодам
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: prometheus-kafka-exporter
+                topologyKey: kubernetes.io/hostname
+      
+      # Tolerations
+      tolerations:
+        - key: "node.kubernetes.io/not-ready"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 300
+        - key: "node.kubernetes.io/unreachable"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 300

@@ -1,0 +1,49 @@
+# Тестовая конфигурация для docker-compose
+scrape_interval: 10
+
+prometheus:
+  url: "http://prometheus:9090"
+  metrics:
+    - "up"
+    - "prometheus_.*"
+  ssl:
+    enabled: false
+  auth:
+    enabled: false
+
+kafka:
+  brokers:
+    - "kafka:29092"
+  topic: "prometheus-metrics"
+  security:
+    protocol: "PLAINTEXT"
+  producer:
+    batch_size: 16384
+    linger_ms: 10
+    compression_type: "gzip"
+    acks: "all"
+    retries: 3
+    retry_backoff_ms: 100
+
+format:
+  json_template: '{"name":"{name}","value":{value},"timestamp":{timestamp},"labels":{labels},"type":"{type}"}'
+  timestamp_format: "unix_ms"
+
+logging:
+  level: "DEBUG"
+  stdout:
+    enabled: true
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  kafka:
+    enabled: false
+
+exporter_metrics:
+  enabled: true
+  port: 8080
+  path: "/metrics"
+
+performance:
+  scrape_workers: 2
+  send_buffer_size: 500
+  scrape_timeout: 5
+  send_timeout: 5

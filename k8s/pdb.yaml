@@ -1,0 +1,12 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: prometheus-kafka-exporter
+  namespace: prometheus-kafka-exporter
+  labels:
+    app: prometheus-kafka-exporter
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: prometheus-kafka-exporter
