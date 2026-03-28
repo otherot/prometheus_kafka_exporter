@@ -1,4 +1,4 @@
-"""Настройка логирования."""
+"""Logging configuration."""
 
 import logging
 import sys
@@ -10,7 +10,7 @@ from .config import LoggingConfig, LoggingKafkaConfig
 
 
 class KafkaHandler(logging.Handler):
-    """Логирование в Kafka."""
+    """Kafka logging handler."""
 
     def __init__(
         self,
@@ -25,13 +25,13 @@ class KafkaHandler(logging.Handler):
         self._listener: Optional[QueueListener] = None
 
     def start(self) -> None:
-        """Запустить асинхронный логгер."""
+        """Start async logging."""
         import asyncio
         from aiokafka import AIOKafkaProducer
 
         self._queue = Queue(maxsize=1000)
 
-        # Создаем продюсер для логов
+        # Create producer for logs
         security = self.kafka_params.get("security", {})
         ssl_context = None
         if security.get("protocol") in ("SSL", "SASL_SSL"):
@@ -86,14 +86,14 @@ class KafkaHandler(logging.Handler):
         self._listener.start()
 
     def stop(self) -> None:
-        """Остановить логгер."""
+        """Stop logging."""
         if self._listener:
             self._queue.put_nowait(None)
             self._listener.stop()
             self._listener = None
 
     def emit(self, record: logging.LogRecord) -> None:
-        """Отправить запись в очередь."""
+        """Send record to queue."""
         try:
             msg = self.format(record)
             if self._queue:
@@ -106,21 +106,21 @@ class KafkaHandler(logging.Handler):
 
 
 def setup_logging(config: LoggingConfig, kafka_params: Optional[dict[str, Any]] = None) -> logging.Logger:
-    """Настроить логирование."""
+    """Configure logging."""
     root_logger = logging.getLogger()
     root_logger.setLevel(getattr(logging, config.level.upper(), logging.INFO))
 
-    # Очистить существующие обработчики
+    # Clear existing handlers
     root_logger.handlers.clear()
 
-    # Stdout обработчик
+    # Stdout handler
     if config.stdout.enabled:
         stdout_handler = logging.StreamHandler(sys.stdout)
         stdout_handler.setLevel(getattr(logging, config.level.upper(), logging.INFO))
         stdout_handler.setFormatter(logging.Formatter(config.stdout.format))
         root_logger.addHandler(stdout_handler)
 
-    # Kafka обработчик
+    # Kafka handler
     if config.kafka.enabled and kafka_params:
         kafka_handler = KafkaHandler(config.kafka, kafka_params)
         kafka_handler.setLevel(getattr(logging, config.level.upper(), logging.INFO))

@@ -1,4 +1,4 @@
-"""Асинхронная отправка метрик в Kafka."""
+"""Asynchronous sending of metrics to Kafka."""
 
 import asyncio
 import json
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class KafkaSender:
-    """Асинхронный отправщик метрик в Kafka."""
+    """Asynchronous sender of metrics to Kafka."""
 
     def __init__(
         self,
@@ -32,8 +32,8 @@ class KafkaSender:
         self._retry_backoff = config.producer.retry_backoff_ms / 1000  # ms -> s
 
     async def start(self) -> None:
-        """Инициализировать Kafka продюсер."""
-        # SSL настройки
+        """Initialize Kafka producer."""
+        # SSL configuration
         ssl_context = None
         security = self.config.security
         if security.protocol in ("SSL", "SASL_SSL"):
@@ -47,7 +47,7 @@ class KafkaSender:
                     password=security.ssl.password or None,
                 )
 
-        # SASL настройки
+        # SASL configuration
         sasl_mechanism = None
         sasl_plain_username = None
         sasl_plain_password = None
@@ -74,13 +74,13 @@ class KafkaSender:
         await self._producer.start()
 
     async def stop(self) -> None:
-        """Закрыть Kafka продюсер."""
+        """Close Kafka producer."""
         if self._producer:
             await self._producer.stop()
             self._producer = None
 
     async def send(self, metric: Metric, formatted: str) -> bool:
-        """Отправить метрику в Kafka с retry."""
+        """Send a metric to Kafka with retry."""
         if not self._producer:
             raise RuntimeError("Sender not started. Call start() first.")
 
@@ -116,7 +116,7 @@ class KafkaSender:
         return False
 
     async def send_batch(self, metrics: list[tuple[Metric, str]]) -> int:
-        """Отправить пакет метрик. Возвращает количество успешно отправленных."""
+        """Send a batch of metrics. Returns the number of successfully sent messages."""
         if not self._producer:
             raise RuntimeError("Sender not started. Call start() first.")
 
@@ -132,7 +132,7 @@ class KafkaSender:
             if result is True:
                 sent_count += 1
 
-        # Обновляем метрики
+        # Update metrics
         duration = time.time() - start_time
         exporter_metrics.kafka_send_duration.observe(duration)
         exporter_metrics.kafka_send_count.labels(status="success" if sent_count > 0 else "error").inc()
@@ -147,7 +147,7 @@ class KafkaSender:
         return sent_count
 
     async def _send_with_retry(self, metric: Metric, formatted: str) -> bool:
-        """Отправить с retry логикой."""
+        """Send with retry logic."""
         for attempt in range(self._retry_count + 1):
             try:
                 await asyncio.wait_for(

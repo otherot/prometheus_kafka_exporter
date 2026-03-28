@@ -1,4 +1,4 @@
-"""Асинхронный сбор метрик с Prometheus endpoint."""
+"""Asynchronous collection of metrics from Prometheus endpoint."""
 
 import asyncio
 import re
@@ -16,7 +16,7 @@ from . import metrics as exporter_metrics
 
 @dataclass
 class Metric:
-    """Представление метрики Prometheus."""
+    """Representation of a Prometheus metric."""
 
     name: str
     value: float
@@ -27,7 +27,7 @@ class Metric:
 
 
 class PrometheusCollector:
-    """Асинхронный коллектор метрик Prometheus."""
+    """Asynchronous collector of Prometheus metrics."""
 
     def __init__(self, config: PrometheusConfig, performance_config: dict[str, Any]):
         self.config = config
@@ -36,8 +36,8 @@ class PrometheusCollector:
         self._compiled_metrics: list[re.Pattern] = []
 
     async def start(self) -> None:
-        """Инициализировать HTTP сессию."""
-        # SSL настройки
+        """Initialize HTTP session."""
+        # SSL configuration
         ssl_context = None
         if self.config.ssl.enabled:
             import ssl
@@ -60,7 +60,7 @@ class PrometheusCollector:
             ssl=ssl_context if self.config.ssl.enabled else None,
         )
 
-        # Заголовки
+        # Headers
         headers = {}
         if self.config.auth.enabled:
             if self.config.auth.token:
@@ -78,18 +78,18 @@ class PrometheusCollector:
             headers=headers,
         )
 
-        # Компилируем паттерны метрик
+        # Compile metric patterns
         for pattern in self.config.metrics:
             self._compiled_metrics.append(re.compile(f"^{pattern}$"))
 
     async def stop(self) -> None:
-        """Закрыть HTTP сессию."""
+        """Close HTTP session."""
         if self._session:
             await self._session.close()
             self._session = None
 
     async def collect(self) -> list[Metric]:
-        """Собрать все метрики с Prometheus endpoint."""
+        """Collect all metrics from Prometheus endpoint."""
         if not self._session:
             raise RuntimeError("Collector not started. Call start() first.")
 
@@ -98,7 +98,7 @@ class PrometheusCollector:
         metrics = []
 
         try:
-            # Собираем метрики конкурентно
+            # Collect metrics concurrently
             tasks = []
             for pattern in self.config.metrics:
                 tasks.append(self._collect_by_pattern(pattern, url))
@@ -108,10 +108,10 @@ class PrometheusCollector:
                 if isinstance(result, list):
                     metrics.extend(result)
                 elif isinstance(result, Exception):
-                    # Логируем ошибку, но продолжаем
+                    # Log error but continue
                     exporter_metrics.errors_total.labels(type="scrape").inc()
 
-            # Обновляем метрики
+            # Update metrics
             duration = time.time() - start_time
             exporter_metrics.scrape_duration.observe(duration)
             exporter_metrics.scrape_count.labels(status="success").inc()
@@ -126,10 +126,10 @@ class PrometheusCollector:
         return metrics
 
     async def _collect_by_pattern(self, pattern: str, query_url: str) -> list[Metric]:
-        """Собрать метрики по паттерну."""
+        """Collect metrics by pattern."""
         metrics = []
 
-        # Запрос к Prometheus API
+        # Query Prometheus API
         async with self._session.get(query_url.format(query=pattern)) as response:
             if response.status != 200:
                 return metrics
@@ -147,7 +147,7 @@ class PrometheusCollector:
         return metrics
 
     def _parse_metric(self, item: dict[str, Any], pattern: str) -> Optional[Metric]:
-        """Распарсить метрику из ответа Prometheus."""
+        """Parse a metric from Prometheus response."""
         try:
             metric_name = item.get("metric", {}).get("__name__", pattern)
             labels = item.get("metric", {})
@@ -170,14 +170,14 @@ class PrometheusCollector:
             return None
 
     async def collect_all(self) -> list[Metric]:
-        """Собрать все метрики одним запросом (более эффективно)."""
+        """Collect all metrics in a single request (more efficient)."""
         if not self._session:
             raise RuntimeError("Collector not started. Call start() first.")
 
         url = urljoin(self.config.url, "/api/v1/query")
         metrics = []
 
-        # Запрос всех метрик
+        # Query all metrics
         async with self._session.get(url, params={"query": "up"}) as response:
             if response.status != 200:
                 return metrics
@@ -186,7 +186,7 @@ class PrometheusCollector:
             if data.get("status") != "success":
                 return metrics
 
-        # Для каждого паттерна делаем отдельный запрос
+        # Make separate request for each pattern
         tasks = []
         for pattern in self.config.metrics:
             tasks.append(self._fetch_metric_pattern(url, pattern))
@@ -199,7 +199,7 @@ class PrometheusCollector:
         return metrics
 
     async def _fetch_metric_pattern(self, base_url: str, pattern: str) -> list[Metric]:
-        """Получить метрики по паттерну."""
+        """Fetch metrics by pattern."""
         metrics = []
 
         async with self._session.get(base_url, params={"query": pattern}) as response:

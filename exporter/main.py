@@ -1,4 +1,4 @@
-"""Prometheus Kafka Exporter - точка входа."""
+"""Prometheus Kafka Exporter - entry point."""
 
 import asyncio
 import logging
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class PrometheusKafkaExporter:
-    """Основной класс экспортера."""
+    """Main exporter class."""
 
     def __init__(self, config: Config):
         self.config = config
@@ -32,10 +32,10 @@ class PrometheusKafkaExporter:
         self._running = False
 
     async def start(self) -> None:
-        """Запустить экспортер."""
+        """Start the exporter."""
         logger.info("Starting Prometheus Kafka Exporter...")
 
-        # Настроить логирование
+        # Configure logging
         kafka_params = {
             "brokers": self.config.kafka.brokers,
             "security": {
@@ -55,7 +55,7 @@ class PrometheusKafkaExporter:
         }
         setup_logging(self.config.logging, kafka_params)
 
-        # Запустить метрики экспортера
+        # Start exporter metrics
         if self.config.exporter_metrics.enabled:
             start_http_server(
                 self.config.exporter_metrics.port,
@@ -65,11 +65,11 @@ class PrometheusKafkaExporter:
                 f"Exporter metrics available at :{self.config.exporter_metrics.port}"
                 f"{self.config.exporter_metrics.path}"
             )
-            # Инициализировать метрики состояния
+            # Initialize status metrics
             exporter_metrics.up.set(1)
             exporter_metrics.scrape_interval.set(self.config.scrape_interval)
 
-        # Инициализировать компоненты
+        # Initialize components
         self._formatter = MetricFormatter(self.config.format)
 
         self._collector = PrometheusCollector(
@@ -96,11 +96,11 @@ class PrometheusKafkaExporter:
         logger.info("Prometheus Kafka Exporter started successfully")
 
     async def stop(self) -> None:
-        """Остановить экспортер."""
+        """Stop the exporter."""
         logger.info("Stopping Prometheus Kafka Exporter...")
         self._running = False
-        
-        # Установить статус down
+
+        # Set status to down
         exporter_metrics.up.set(0)
 
         if self._collector:
@@ -112,7 +112,7 @@ class PrometheusKafkaExporter:
         logger.info("Prometheus Kafka Exporter stopped")
 
     async def run(self) -> None:
-        """Основный цикл работы."""
+        """Main event loop."""
         if not self._running:
             raise RuntimeError("Exporter not started. Call start() first.")
 
@@ -129,8 +129,8 @@ class PrometheusKafkaExporter:
             await asyncio.sleep(self.config.scrape_interval)
 
     async def _scrape_and_send(self) -> None:
-        """Собрать и отправить метрики."""
-        # Собрать метрики
+        """Scrape and send metrics."""
+        # Scrape metrics
         metrics = await self._collector.collect()
         logger.debug(f"Collected {len(metrics)} metrics")
 
@@ -138,7 +138,7 @@ class PrometheusKafkaExporter:
             logger.warning("No metrics collected")
             return
 
-        # Форматировать метрики
+        # Format metrics
         formatted = []
         for metric in metrics:
             try:
@@ -147,18 +147,18 @@ class PrometheusKafkaExporter:
             except Exception as e:
                 logger.error(f"Error formatting metric {metric.name}: {e}")
 
-        # Отправить в Kafka
+        # Send to Kafka
         if formatted:
             sent = await self._sender.send_batch(formatted)
             logger.info(f"Sent {sent}/{len(formatted)} metrics to Kafka")
 
 
 async def main(config_path: str = "/etc/config/config.yaml") -> None:
-    """Точка входа."""
-    # Загрузить конфигурацию
+    """Entry point."""
+    # Load configuration
     config_file = Path(config_path)
     if not config_file.exists():
-        # Попробовать альтернативные пути
+        # Try alternative paths
         for alt_path in ["config/config.yaml", "./config.yaml", "/config/config.yaml"]:
             config_file = Path(alt_path)
             if config_file.exists():
@@ -173,7 +173,7 @@ async def main(config_path: str = "/etc/config/config.yaml") -> None:
 
     exporter = PrometheusKafkaExporter(config)
 
-    # Обработчики сигналов
+    # Signal handlers
     loop = asyncio.get_event_loop()
     shutdown_event = asyncio.Event()
 
@@ -186,16 +186,16 @@ async def main(config_path: str = "/etc/config/config.yaml") -> None:
 
     try:
         await exporter.start()
-        
-        # Запустить основной цикл и ждать сигнала остановки
+
+        # Start main loop and wait for shutdown signal
         main_task = asyncio.create_task(exporter.run())
-        
+
         await shutdown_event.wait()
-        
+
         exporter._running = False
-        await asyncio.sleep(0.1)  # Дать циклу завершиться
+        await asyncio.sleep(0.1)  # Allow loop to complete
         main_task.cancel()
-        
+
         try:
             await main_task
         except asyncio.CancelledError:

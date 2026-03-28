@@ -1,4 +1,4 @@
-"""Модуль загрузки и валидации конфигурации."""
+"""Configuration loading and validation module."""
 
 import os
 from dataclasses import dataclass, field
@@ -10,7 +10,7 @@ import yaml
 
 @dataclass
 class SSLConfig:
-    """Настройки SSL."""
+    """SSL configuration."""
     enabled: bool = False
     ca_file: str = ""
     cert_file: str = ""
@@ -21,7 +21,7 @@ class SSLConfig:
 
 @dataclass
 class AuthConfig:
-    """Настройки аутентификации."""
+    """Authentication configuration."""
     enabled: bool = False
     username: str = ""
     password: str = ""
@@ -30,7 +30,7 @@ class AuthConfig:
 
 @dataclass
 class PrometheusConfig:
-    """Настройки подключения к Prometheus."""
+    """Prometheus connection configuration."""
     url: str = "http://prometheus:9090"
     metrics: list[str] = field(default_factory=lambda: ["up"])
     ssl: SSLConfig = field(default_factory=SSLConfig)
@@ -39,7 +39,7 @@ class PrometheusConfig:
 
 @dataclass
 class SASLConfig:
-    """Настройки SASL аутентификации."""
+    """SASL authentication configuration."""
     mechanism: str = "PLAIN"
     username: str = ""
     password: str = ""
@@ -47,7 +47,7 @@ class SASLConfig:
 
 @dataclass
 class KafkaSecurityConfig:
-    """Настройки безопасности Kafka."""
+    """Kafka security configuration."""
     protocol: str = "PLAINTEXT"
     ssl: SSLConfig = field(default_factory=SSLConfig)
     sasl: SASLConfig = field(default_factory=SASLConfig)
@@ -55,7 +55,7 @@ class KafkaSecurityConfig:
 
 @dataclass
 class KafkaProducerConfig:
-    """Настройки Kafka продюсера."""
+    """Kafka producer configuration."""
     batch_size: int = 16384
     linger_ms: int = 10
     compression_type: str = "snappy"
@@ -66,7 +66,7 @@ class KafkaProducerConfig:
 
 @dataclass
 class KafkaConfig:
-    """Настройки Kafka."""
+    """Kafka configuration."""
     brokers: list[str] = field(default_factory=lambda: ["kafka:9092"])
     topic: str = "prometheus-metrics"
     security: KafkaSecurityConfig = field(default_factory=KafkaSecurityConfig)
@@ -75,7 +75,7 @@ class KafkaConfig:
 
 @dataclass
 class FormatConfig:
-    """Настройки формата JSON."""
+    """JSON format configuration."""
     json_template: str = field(
         default_factory=lambda: '{"name":"{name}","value":{value},"timestamp":{timestamp},"labels":{labels},"type":"{type}"}'
     )
@@ -84,14 +84,14 @@ class FormatConfig:
 
 @dataclass
 class LoggingStdoutConfig:
-    """Настройки логирования в stdout."""
+    """Stdout logging configuration."""
     enabled: bool = True
     format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 
 @dataclass
 class LoggingKafkaConfig:
-    """Настройки логирования в Kafka."""
+    """Kafka logging configuration."""
     enabled: bool = False
     topic: str = "prometheus-exporter-logs"
     format: str = ""
@@ -99,7 +99,7 @@ class LoggingKafkaConfig:
 
 @dataclass
 class LoggingConfig:
-    """Настройки логирования."""
+    """Logging configuration."""
     level: str = "INFO"
     stdout: LoggingStdoutConfig = field(default_factory=LoggingStdoutConfig)
     kafka: LoggingKafkaConfig = field(default_factory=LoggingKafkaConfig)
@@ -107,7 +107,7 @@ class LoggingConfig:
 
 @dataclass
 class ExporterMetricsConfig:
-    """Настройки метрик экспортера."""
+    """Exporter metrics configuration."""
     enabled: bool = True
     port: int = 8080
     path: str = "/metrics"
@@ -115,7 +115,7 @@ class ExporterMetricsConfig:
 
 @dataclass
 class PerformanceConfig:
-    """Настройки производительности."""
+    """Performance configuration."""
     scrape_workers: int = 4
     send_buffer_size: int = 1000
     scrape_timeout: int = 10
@@ -124,7 +124,7 @@ class PerformanceConfig:
 
 @dataclass
 class Config:
-    """Основная конфигурация приложения."""
+    """Main application configuration."""
     scrape_interval: int = 30
     prometheus: PrometheusConfig = field(default_factory=PrometheusConfig)
     kafka: KafkaConfig = field(default_factory=KafkaConfig)
@@ -135,7 +135,7 @@ class Config:
 
 
 def load_config(config_path: str | Path) -> Config:
-    """Загрузить конфигурацию из YAML файла."""
+    """Load configuration from YAML file."""
     path = Path(config_path)
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
@@ -147,7 +147,7 @@ def load_config(config_path: str | Path) -> Config:
 
 
 def _parse_config(data: dict[str, Any]) -> Config:
-    """Распарсить словарь в объект Config."""
+    """Parse dictionary into Config object."""
     config = Config()
 
     config.scrape_interval = data.get("scrape_interval", config.scrape_interval)

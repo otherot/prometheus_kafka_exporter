@@ -1,8 +1,8 @@
-"""Метрики Prometheus для мониторинга экспортера."""
+"""Prometheus metrics for exporter monitoring."""
 
 from prometheus_client import Counter, Gauge, Histogram, Summary
 
-# Метрики сбора метрик
+# Scrape metrics
 scrape_duration = Histogram(
     "exporter_scrape_duration_seconds",
     "Duration of Prometheus metrics scraping",
@@ -20,7 +20,7 @@ scrape_metrics_count = Gauge(
     "Number of metrics collected in last scrape",
 )
 
-# Метрики отправки в Kafka
+# Kafka send metrics
 kafka_send_duration = Histogram(
     "exporter_kafka_send_duration_seconds",
     "Duration of Kafka send operations",
@@ -44,14 +44,14 @@ kafka_batch_size = Histogram(
     buckets=(1, 5, 10, 25, 50, 100, 250, 500, 1000),
 )
 
-# Метрики ошибок
+# Error metrics
 errors_total = Counter(
     "exporter_errors_total",
     "Total number of exporter errors",
     labelnames=["type"],  # scrape, format, send, kafka
 )
 
-# Метрики состояния
+# Status metrics
 up = Gauge(
     "exporter_up",
     "Exporter health status (1 = up, 0 = down)",
@@ -67,7 +67,7 @@ last_send_timestamp = Gauge(
     "Timestamp of the last successful Kafka send",
 )
 
-# Метрики производительности
+# Performance metrics
 scrape_interval = Gauge(
     "exporter_scrape_interval_seconds",
     "Configured scrape interval",

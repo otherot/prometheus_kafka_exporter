@@ -1,4 +1,4 @@
-"""Форматирование метрик в JSON."""
+"""Metric formatting to JSON."""
 
 import json
 import time
@@ -10,25 +10,25 @@ from .collector import Metric
 
 
 class MetricFormatter:
-    """Форматирование метрик в JSON."""
+    """Metric formatter to JSON."""
 
     def __init__(self, config: FormatConfig):
         self.config = config
         self._template = config.json_template
 
     def format(self, metric: Metric) -> str:
-        """Форматировать метрику в JSON строку."""
+        """Format a metric to JSON string."""
         data = self._build_data(metric)
-        # Парсим labels обратно в dict для JSON сериализации
+        # Parse labels back to dict for JSON serialization
         data["labels"] = json.loads(data["labels"])
         return json.dumps(data, ensure_ascii=False)
 
     def format_batch(self, metrics: list[Metric]) -> list[str]:
-        """Форматировать пакет метрик."""
+        """Format a batch of metrics."""
         return [self.format(m) for m in metrics]
 
     def _build_data(self, metric: Metric) -> dict[str, Any]:
-        """Построить данные для форматирования."""
+        """Build data for formatting."""
         return {
             "name": metric.name,
             "value": metric.value,
@@ -39,7 +39,7 @@ class MetricFormatter:
         }
 
     def _format_timestamp(self, timestamp_ms: int) -> int | str:
-        """Форматировать timestamp согласно настройкам."""
+        """Format timestamp according to settings."""
         if self.config.timestamp_format == "unix_ms":
             return timestamp_ms
         elif self.config.timestamp_format == "unix_s":
@@ -51,9 +51,9 @@ class MetricFormatter:
             return timestamp_ms
 
     def validate_template(self) -> tuple[bool, str]:
-        """Проверить валидность шаблона."""
+        """Validate template."""
         try:
-            # Пробуем форматировать тестовую метрику
+            # Try to format a test metric
             test_metric = Metric(
                 name="test_metric",
                 value=1.0,

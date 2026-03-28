@@ -1,4 +1,4 @@
-"""Интеграционные тесты для Prometheus Kafka Exporter."""
+"""Integration tests for Prometheus Kafka Exporter."""
 
 import asyncio
 import json
@@ -11,7 +11,7 @@ from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 
 
 class KafkaIntegrationTest:
-    """Базовый класс для интеграционных тестов с Kafka."""
+    """Base class for Kafka integration tests."""
 
     KAFKA_BOOTSTRAP = "localhost:9092"
     PROMETHEUS_URL = "http://localhost:9090"
@@ -19,12 +19,12 @@ class KafkaIntegrationTest:
 
     @pytest.fixture
     def topic(self) -> str:
-        """Топик по умолчанию для тестов."""
+        """Default topic for tests."""
         return "test-topic"
 
     @pytest.fixture
     async def kafka_producer(self):
-        """Создать Kafka продюсер для тестов."""
+        """Create Kafka producer for tests."""
         producer = AIOKafkaProducer(bootstrap_servers=self.KAFKA_BOOTSTRAP)
         await producer.start()
         try:
@@ -34,7 +34,7 @@ class KafkaIntegrationTest:
 
     @pytest.fixture
     async def kafka_consumer(self, topic: str):
-        """Создать Kafka консьюмер для тестов."""
+        """Create Kafka consumer for tests."""
         consumer = AIOKafkaConsumer(
             topic,
             bootstrap_servers=self.KAFKA_BOOTSTRAP,
@@ -49,23 +49,23 @@ class KafkaIntegrationTest:
 
     @pytest.fixture
     async def http_session(self):
-        """Создать HTTP сессию для тестов."""
+        """Create HTTP session for tests."""
         async with ClientSession() as session:
             yield session
 
 
 class TestPrometheusAvailability(KafkaIntegrationTest):
-    """Тесты доступности Prometheus."""
+    """Prometheus availability tests."""
 
     @pytest.mark.asyncio
     async def test_prometheus_health(self, http_session: ClientSession):
-        """Проверка здоровья Prometheus."""
+        """Check Prometheus health."""
         async with http_session.get(f"{self.PROMETHEUS_URL}/-/healthy") as response:
             assert response.status == 200
 
     @pytest.mark.asyncio
     async def test_prometheus_api(self, http_session: ClientSession):
-        """Проверка API Prometheus."""
+        """Check Prometheus API."""
         async with http_session.get(
             f"{self.PROMETHEUS_URL}/api/v1/query",
             params={"query": "up"},
@@ -76,23 +76,82 @@ class TestPrometheusAvailability(KafkaIntegrationTest):
 
 
 class TestExporterMetrics(KafkaIntegrationTest):
-    """Тесты метрик экспортера."""
+    """Exporter metrics tests."""
 
     @pytest.mark.asyncio
     async def test_exporter_metrics_endpoint(self, http_session: ClientSession):
-        """Проверка endpoint метрик экспортера."""
+        """Check exporter metrics endpoint."""
         async with http_session.get(f"{self.EXPORTER_METRICS}/metrics") as response:
             assert response.status == 200
             content = await response.text()
+            # Standard Python metrics
             assert "python_" in content or "process_" in content
+            # Custom exporter metrics
+            assert "exporter_up" in content
+            assert "exporter_scrape_duration_seconds" in content
+            assert "exporter_scrape_count_total" in content
+            assert "exporter_kafka_send_duration_seconds" in content
+            assert "exporter_kafka_messages_count_total" in content
+
+    @pytest.mark.asyncio
+    async def test_exporter_up_metric(self, http_session: ClientSession):
+        """Check exporter_up metric."""
+        async with http_session.get(f"{self.EXPORTER_METRICS}/metrics") as response:
+            assert response.status == 200
+            content = await response.text()
+            # Exporter should be in up status
+            assert "exporter_up 1.0" in content
+
+    @pytest.mark.asyncio
+    async def test_exporter_scrape_metrics(self, http_session: ClientSession):
+        """Check scrape metrics."""
+        async with http_session.get(f"{self.EXPORTER_METRICS}/metrics") as response:
+            assert response.status == 200
+            content = await response.text()
+            # Scrape metrics should be present
+            assert "exporter_scrape_duration_seconds" in content
+            assert "exporter_scrape_count_total" in content
+            assert "exporter_scrape_metrics_count" in content
+            assert "exporter_last_scrape_timestamp_seconds" in content
+
+    @pytest.mark.asyncio
+    async def test_exporter_kafka_metrics(self, http_session: ClientSession):
+        """Check Kafka metrics."""
+        async with http_session.get(f"{self.EXPORTER_METRICS}/metrics") as response:
+            assert response.status == 200
+            content = await response.text()
+            # Kafka metrics should be present
+            assert "exporter_kafka_send_duration_seconds" in content
+            assert "exporter_kafka_send_count_total" in content
+            assert "exporter_kafka_messages_count_total" in content
+            assert "exporter_kafka_batch_size" in content
+            assert "exporter_last_send_timestamp_seconds" in content
+
+    @pytest.mark.asyncio
+    async def test_exporter_error_metrics(self, http_session: ClientSession):
+        """Check error metrics."""
+        async with http_session.get(f"{self.EXPORTER_METRICS}/metrics") as response:
+            assert response.status == 200
+            content = await response.text()
+            # Error metric should be present (even if 0)
+            assert "exporter_errors_total" in content
+
+    @pytest.mark.asyncio
+    async def test_exporter_config_metrics(self, http_session: ClientSession):
+        """Check config metrics."""
+        async with http_session.get(f"{self.EXPORTER_METRICS}/metrics") as response:
+            assert response.status == 200
+            content = await response.text()
+            # Config metrics
+            assert "exporter_scrape_interval_seconds" in content
 
 
 class TestMetricCollection(KafkaIntegrationTest):
-    """Тесты сбора метрик."""
+    """Metric collection tests."""
 
     @pytest.mark.asyncio
     async def test_collect_up_metric(self, http_session: ClientSession):
-        """Проверка сбора метрики 'up'."""
+        """Check collection of 'up' metric."""
         async with http_session.get(
             f"{self.PROMETHEUS_URL}/api/v1/query",
             params={"query": "up"},
@@ -104,28 +163,28 @@ class TestMetricCollection(KafkaIntegrationTest):
 
 
 class TestKafkaIntegration(KafkaIntegrationTest):
-    """Тесты интеграции с Kafka."""
+    """Kafka integration tests."""
 
     @pytest.mark.asyncio
     async def test_kafka_produce_consume(self, kafka_producer, kafka_consumer):
-        """Проверка отправки и получения сообщений."""
+        """Check sending and receiving messages."""
         topic = "test-topic"
         message = b"test message"
 
-        # Отправить сообщение
+        # Send message
         await kafka_producer.send_and_wait(topic, value=message)
 
-        # Получить сообщение
+        # Receive message
         msg = await kafka_consumer.getone()
         assert msg.value == message
 
     @pytest.mark.asyncio
     async def test_kafka_json_message(self, kafka_producer):
-        """Проверка отправки JSON сообщений."""
+        """Check sending JSON messages."""
         topic = "test-json-topic"
         data = {"name": "test_metric", "value": 123.45, "timestamp": int(time.time() * 1000)}
 
-        # Создать консьюмер для этого топика
+        # Create consumer for this topic
         consumer = AIOKafkaConsumer(
             topic,
             bootstrap_servers=self.KAFKA_BOOTSTRAP,
@@ -134,10 +193,10 @@ class TestKafkaIntegration(KafkaIntegrationTest):
         )
         await consumer.start()
         try:
-            # Отправить JSON
+            # Send JSON
             await kafka_producer.send_and_wait(topic, value=json.dumps(data).encode())
 
-            # Получить и распарсить
+            # Receive and parse
             msg = await consumer.getone()
             received = json.loads(msg.value.decode())
             assert received["name"] == data["name"]
@@ -147,14 +206,14 @@ class TestKafkaIntegration(KafkaIntegrationTest):
 
 
 class TestExporterEndToEnd(KafkaIntegrationTest):
-    """Сквозные тесты экспортера."""
+    """End-to-end exporter tests."""
 
     @pytest.mark.asyncio
     async def test_metrics_in_kafka(self):
-        """Проверка наличия метрик в Kafka после работы экспортера."""
+        """Check metrics in Kafka after exporter runs."""
         topic = "prometheus-metrics"
 
-        # Создать консьюмер для этого топика
+        # Create consumer for this topic
         consumer = AIOKafkaConsumer(
             topic,
             bootstrap_servers=self.KAFKA_BOOTSTRAP,
@@ -163,14 +222,14 @@ class TestExporterEndToEnd(KafkaIntegrationTest):
         )
         await consumer.start()
         try:
-            # Ждем сообщения с таймаутом
+            # Wait for messages with timeout
             messages = []
             async for msg in consumer:
                 messages.append(msg)
                 if len(messages) >= 5:
                     break
 
-            # Проверяем формат сообщений
+            # Check message format
             for msg in messages:
                 data = json.loads(msg.value.decode())
                 assert "name" in data
