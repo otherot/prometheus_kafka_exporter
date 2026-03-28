@@ -1,0 +1,93 @@
+# Prometheus конфигурация для нагрузочного тестирования
+# Генерирует большое количество метрик для стресс-теста экспортера
+
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+  scrape_timeout: 3s
+
+# Rule files для генерации дополнительных метрик
+rule_files:
+  - "/etc/prometheus/rules/*.yml"
+
+scrape_configs:
+  # Prometheus собственные метрики
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          cluster: "load-test"
+          environment: "test"
+
+  # Node Exporter - системные метрики
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels:
+          cluster: "load-test"
+          environment: "test"
+
+  # Fake Metrics Generator - генерирует много метрик для нагрузки
+  - job_name: "fake-metrics"
+    metrics_path: /metrics
+    honor_labels: true
+    static_configs:
+      - targets: ["fake-metrics:8000"]
+        labels:
+          cluster: "load-test"
+    # Собираем много метрик с разными лейблами
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: "fake-metrics-generator"
+
+  # Additional targets для симуляции production нагрузки
+  - job_name: "additional-targets"
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      # Генерируем 100 target'ов для нагрузки
+      - targets: ["prometheus:9090"]
+        labels:
+          service: "api-gateway"
+          region: "us-east-1"
+          zone: "a"
+      - targets: ["prometheus:9090"]
+        labels:
+          service: "api-gateway"
+          region: "us-east-1"
+          zone: "b"
+      - targets: ["prometheus:9090"]
+        labels:
+          service: "user-service"
+          region: "us-west-2"
+          zone: "a"
+      - targets: ["prometheus:9090"]
+        labels:
+          service: "order-service"
+          region: "eu-west-1"
+          zone: "a"
+      - targets: ["prometheus:9090"]
+        labels:
+          service: "payment-service"
+          region: "ap-southeast-1"
+          zone: "a"
+
+  # HTTP Blackbox Exporter для синтетических проверок (опционально)
+  - job_name: "blackbox"
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://prometheus:9090/-/healthy
+          - http://prometheus:9090/metrics
+        labels:
+          probe_type: "http"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "blackbox-exporter:9115"

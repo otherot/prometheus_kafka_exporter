@@ -1,0 +1,55 @@
+# Конфигурация Prometheus Kafka Exporter для нагрузочного тестирования
+
+scrape_interval: 5
+
+prometheus:
+  url: "http://prometheus:9090"
+  metrics:
+    - "up"
+    - "prometheus_.*"
+    - "node_.*"
+    - "go_.*"
+    - "process_.*"
+    - "scrape_.*"
+    - "http_.*"
+  ssl:
+    enabled: false
+  auth:
+    enabled: false
+
+kafka:
+  brokers:
+    - "kafka:29092"
+  topic: "prometheus-metrics"
+  security:
+    protocol: "PLAINTEXT"
+  producer:
+    batch_size: 32768
+    linger_ms: 20
+    compression_type: "gzip"
+    acks: "1"
+    retries: 3
+    retry_backoff_ms: 50
+
+format:
+  json_template: '{"name":"{name}","value":{value},"timestamp":{timestamp},"labels":{labels},"type":"{type}"}'
+  timestamp_format: "unix_ms"
+
+logging:
+  level: "INFO"
+  stdout:
+    enabled: true
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  kafka:
+    enabled: false
+
+exporter_metrics:
+  enabled: true
+  port: 8080
+  path: "/metrics"
+
+performance:
+  scrape_workers: 8
+  send_buffer_size: 1000
+  scrape_timeout: 3
+  send_timeout: 10
